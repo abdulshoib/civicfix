@@ -1,43 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
 
 const API_URL = "http://localhost:8080/api/issues";
-
-const issues = [
-  {
-    id: "CF-2048",
-    category: "Roads & transport",
-    title: "Pothole on the main road",
-    location: "Green Park, Hyderabad",
-    status: "In progress",
-    statusClass: "progress",
-    icon: "↗",
-    tone: "orange",
-    date: "2 hours ago",
-  },
-  {
-    id: "CF-2047",
-    category: "Waste management",
-    title: "Overflowing community bins",
-    location: "Lake View Colony",
-    status: "Under review",
-    statusClass: "review",
-    icon: "♧",
-    tone: "green",
-    date: "5 hours ago",
-  },
-  {
-    id: "CF-2046",
-    category: "Street lighting",
-    title: "Streetlight not working",
-    location: "Road No. 4, Jubilee Hills",
-    status: "Resolved",
-    statusClass: "resolved",
-    icon: "✳",
-    tone: "blue",
-    date: "Yesterday",
-  },
-];
 
 const steps = [
   {
@@ -64,6 +28,10 @@ const steps = [
 ];
 
 function App() {
+  const [issues, setIssues] = useState([]);
+  const [isLoadingIssues, setIsLoadingIssues] = useState(true);
+  const [issueError, setIssueError] = useState("");
+
   const [form, setForm] = useState({
     title: "",
     category: "Roads & transport",
@@ -74,7 +42,38 @@ function App() {
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [savedIssueId, setSavedIssueId] = useState("");
+
+  async function loadIssues() {
+    setIsLoadingIssues(true);
+    setIssueError("");
+
+    try {
+      const response = await fetch(API_URL);
+
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (!Array.isArray(data)) {
+        throw new Error("The issues API returned an unexpected response.");
+      }
+
+      setIssues(data);
+    } catch (error) {
+      console.error("CivicFix could not load issues:", error);
+      setIssueError(
+        "We couldn't load community reports. Check that the backend is running, then try again.",
+      );
+    } finally {
+      setIsLoadingIssues(false);
+    }
+  }
+
+  useEffect(() => {
+    loadIssues();
+  }, []);
 
   function updateForm(event) {
     const { name, value } = event.target;
@@ -96,7 +95,6 @@ function App() {
     setIsSubmitting(true);
     setMessage("Submitting your report...");
     setMessageType("info");
-    setSavedIssueId("");
 
     const payload = {
       title: form.title.trim(),
@@ -122,7 +120,6 @@ function App() {
       }
 
       let savedIssue = null;
-
       const responseText = await response.text();
 
       if (responseText) {
@@ -135,7 +132,6 @@ function App() {
 
       const issueId = savedIssue?.id ?? savedIssue?.issueId ?? "";
 
-      setSavedIssueId(issueId ? String(issueId) : "");
       setMessage(
         issueId
           ? `Your issue was submitted successfully. Reference: CF-${issueId}.`
@@ -149,16 +145,86 @@ function App() {
         location: "",
         description: "",
       });
+
+      await loadIssues();
     } catch (error) {
       console.error("CivicFix report submission failed:", error);
 
       setMessage(
-        "We couldn't submit your report. Check that the backend is running at localhost:8080, then try again. If the problem continues, check the backend terminal.",
+        "We couldn't submit your report. Check that the backend is running at localhost:8080, then try again.",
       );
       setMessageType("error");
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  function renderIssue(issue) {
+    const statusKey = String(issue.status || "REPORTED").toUpperCase();
+
+    const statusLabels = {
+      REPORTED: "Reported",
+      UNDER_REVIEW: "Under review",
+      IN_PROGRESS: "In progress",
+      RESOLVED: "Resolved",
+      REOPENED: "Reopened",
+    };
+
+    const statusClasses = {
+      REPORTED: "review",
+      UNDER_REVIEW: "review",
+      IN_PROGRESS: "progress",
+      RESOLVED: "resolved",
+      REOPENED: "progress",
+    };
+
+    const category = issue.category || "Other";
+    const categoryLower = category.toLowerCase();
+
+    const tone = categoryLower.includes("road")
+      ? "orange"
+      : categoryLower.includes("waste") || categoryLower.includes("public")
+        ? "green"
+        : "blue";
+
+    const createdDate = issue.createdAt
+      ? new Date(issue.createdAt).toLocaleString(undefined, {
+          dateStyle: "medium",
+          timeStyle: "short",
+        })
+      : "Date unavailable";
+
+    return (
+      <article className="issue-card" key={issue.id}>
+        <div className={`issue-illustration ${tone}`}>
+          <span className="issue-art-symbol" aria-hidden="true">
+            {statusKey === "RESOLVED" ? "✓" : "↗"}
+          </span>
+          <span className="issue-category">{category}</span>
+          <span className="issue-id">CF-{issue.id}</span>
+        </div>
+
+        <div className="issue-content">
+          <div className="issue-location">
+            <span aria-hidden="true">⌖</span>{" "}
+            {issue.location || "Location not provided"}
+          </div>
+
+          <h3>{issue.title || "Untitled issue"}</h3>
+
+          <div className="issue-meta">
+            <span
+              className={`status-pill ${statusClasses[statusKey] || "review"}`}
+            >
+              <span />
+              {statusLabels[statusKey] || statusKey.replaceAll("_", " ")}
+            </span>
+
+            <span className="issue-date">{createdDate}</span>
+          </div>
+        </div>
+      </article>
+    );
   }
 
   return (
@@ -239,6 +305,7 @@ function App() {
             </form>
           </div>
         </section>
+
         <section className="hero section-wrap" id="home">
           <div className="hero-copy">
             <div className="eyebrow">
@@ -273,6 +340,7 @@ function App() {
                 <span>R</span>
                 <span>+</span>
               </div>
+
               <p>
                 <strong>Small reports. Real change.</strong>
                 <br />
@@ -386,7 +454,7 @@ function App() {
             <div className="section-heading-side">
               <p>
                 Every reported issue is a chance to make daily life a little
-                better. Here's what community progress can look like.
+                better. See the latest reports submitted by your community.
               </p>
               <a className="text-link" href="#report">
                 Be part of it <span>↗</span>
@@ -394,36 +462,30 @@ function App() {
             </div>
           </div>
 
-          <div className="issue-grid">
-            {issues.map((issue) => (
-              <article className="issue-card" key={issue.id}>
-                <div className={`issue-illustration ${issue.tone}`}>
-                  <span className="issue-art-symbol">{issue.icon}</span>
-                  <span className="issue-category">{issue.category}</span>
-                  <span className="issue-id">{issue.id}</span>
-                </div>
+          {isLoadingIssues && (
+            <p className="demo-note" role="status">
+              Loading community reports…
+            </p>
+          )}
 
-                <div className="issue-content">
-                  <div className="issue-location">
-                    <span>⌖</span> {issue.location}
-                  </div>
-                  <h3>{issue.title}</h3>
-                  <div className="issue-meta">
-                    <span className={`status-pill ${issue.statusClass}`}>
-                      <span />
-                      {issue.status}
-                    </span>
-                    <span className="issue-date">{issue.date}</span>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
+          {issueError && (
+            <p className="demo-note error" role="alert">
+              {issueError}{" "}
+              <button className="text-link" type="button" onClick={loadIssues}>
+                Try again
+              </button>
+            </p>
+          )}
 
-          <p className="demo-note">
-            These are sample issues for the design preview. The live issue board
-            will be connected separately to reports stored in the backend.
-          </p>
+          {!isLoadingIssues && !issueError && issues.length === 0 && (
+            <p className="demo-note">
+              No community reports yet. Be the first to report an issue.
+            </p>
+          )}
+
+          {!issueError && issues.length > 0 && (
+            <div className="issue-grid">{issues.map(renderIssue)}</div>
+          )}
         </section>
 
         <section className="how-section" id="how-it-works">
