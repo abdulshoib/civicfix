@@ -1,6 +1,8 @@
 import { useState } from "react";
 import "./App.css";
 
+const API_URL = "http://localhost:8080/api/issues";
+
 const issues = [
   {
     id: "CF-2048",
@@ -68,18 +70,95 @@ function App() {
     location: "",
     description: "",
   });
+
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [savedIssueId, setSavedIssueId] = useState("");
 
   function updateForm(event) {
-    setForm({ ...form, [event.target.name]: event.target.value });
+    const { name, value } = event.target;
+
+    setForm((previousForm) => ({
+      ...previousForm,
+      [name]: value,
+    }));
+
     setMessage("");
+    setMessageType("");
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
-    setMessage(
-      "Your demo report is ready! Account login and database submission will be connected in a later build stage.",
-    );
+
+    if (isSubmitting) return;
+
+    setIsSubmitting(true);
+    setMessage("Submitting your report...");
+    setMessageType("info");
+    setSavedIssueId("");
+
+    const payload = {
+      title: form.title.trim(),
+      category: form.category,
+      location: form.location.trim(),
+      description: form.description.trim(),
+    };
+
+    try {
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          errorText || `Request failed with status ${response.status}`,
+        );
+      }
+
+      let savedIssue = null;
+
+      const responseText = await response.text();
+
+      if (responseText) {
+        try {
+          savedIssue = JSON.parse(responseText);
+        } catch {
+          savedIssue = null;
+        }
+      }
+
+      const issueId = savedIssue?.id ?? savedIssue?.issueId ?? "";
+
+      setSavedIssueId(issueId ? String(issueId) : "");
+      setMessage(
+        issueId
+          ? `Your issue was submitted successfully. Reference: CF-${issueId}.`
+          : "Your issue was submitted successfully.",
+      );
+      setMessageType("success");
+
+      setForm({
+        title: "",
+        category: "Roads & transport",
+        location: "",
+        description: "",
+      });
+    } catch (error) {
+      console.error("CivicFix report submission failed:", error);
+
+      setMessage(
+        "We couldn't submit your report. Check that the backend is running at localhost:8080, then try again. If the problem continues, check the backend terminal.",
+      );
+      setMessageType("error");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -101,8 +180,8 @@ function App() {
         </nav>
 
         <div className="header-actions">
-          <a className="login-link" href="#report">
-            Sign in
+          <a className="login-link" href="#login">
+            Login
           </a>
           <a className="button button-small" href="#report">
             Report an issue <span aria-hidden="true">↗</span>
@@ -111,6 +190,55 @@ function App() {
       </header>
 
       <main>
+        <section
+          className="section-wrap"
+          id="login"
+          style={{ paddingTop: "100px", paddingBottom: "100px" }}
+        >
+          <div className="report-form">
+            <div className="form-heading">
+              <span className="form-icon">🔐</span>
+              <div>
+                <h3>Welcome back to CivicFix</h3>
+                <p>Login to continue making your community better.</p>
+              </div>
+            </div>
+
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                alert(
+                  "Login is not connected yet. We will implement authentication next.",
+                );
+              }}
+            >
+              <label htmlFor="login-email">Email address</label>
+              <input
+                id="login-email"
+                type="email"
+                placeholder="you@example.com"
+                required
+              />
+
+              <label htmlFor="login-password">Password</label>
+              <input
+                id="login-password"
+                type="password"
+                placeholder="Enter your password"
+                required
+              />
+
+              <button className="button form-submit" type="submit">
+                Login
+              </button>
+
+              <p className="form-footnote">
+                Authentication is not implemented yet. This form is currently a
+                preview.
+              </p>
+            </form>
+          </div>
+        </section>
         <section className="hero section-wrap" id="home">
           <div className="hero-copy">
             <div className="eyebrow">
@@ -177,18 +305,21 @@ function App() {
                 <span className="building-window" />
                 <span className="building-window" />
               </div>
+
               <div className="building building-two">
                 <span className="building-window" />
                 <span className="building-window" />
                 <span className="building-window" />
                 <span className="building-window" />
               </div>
+
               <div className="building building-three">
                 <span className="building-window" />
                 <span className="building-window" />
                 <span className="building-window" />
                 <span className="building-window" />
               </div>
+
               <div className="road" />
               <div className="road-line" />
 
@@ -251,6 +382,7 @@ function App() {
                 taking <span>shape.</span>
               </h2>
             </div>
+
             <div className="section-heading-side">
               <p>
                 Every reported issue is a chance to make daily life a little
@@ -270,6 +402,7 @@ function App() {
                   <span className="issue-category">{issue.category}</span>
                   <span className="issue-id">{issue.id}</span>
                 </div>
+
                 <div className="issue-content">
                   <div className="issue-location">
                     <span>⌖</span> {issue.location}
@@ -286,9 +419,10 @@ function App() {
               </article>
             ))}
           </div>
+
           <p className="demo-note">
-            Sample issues shown for design preview. Live community reports will
-            appear here once the backend is connected.
+            These are sample issues for the design preview. The live issue board
+            will be connected separately to reports stored in the backend.
           </p>
         </section>
 
@@ -331,12 +465,13 @@ function App() {
               starts with <span>one report.</span>
             </h2>
             <p>
-              Tell us what needs attention. We'll build the tools to help you
-              follow the journey from report to resolution.
+              Tell us what needs attention. Submit a report and connect your
+              neighbourhood feedback to the CivicFix backend.
             </p>
+
             <div className="report-promise">
-              <span>✓</span> Clear status updates <span>✓</span> Community-first
-              design
+              <span>✓</span> Easy reporting
+              <span>✓</span> Community-first design
             </div>
           </div>
 
@@ -356,6 +491,7 @@ function App() {
               value={form.title}
               onChange={updateForm}
               placeholder="e.g. Pothole near the bus stop"
+              maxLength={150}
               required
             />
 
@@ -365,6 +501,7 @@ function App() {
               name="category"
               value={form.category}
               onChange={updateForm}
+              required
             >
               <option>Roads &amp; transport</option>
               <option>Waste management</option>
@@ -381,6 +518,7 @@ function App() {
               value={form.location}
               onChange={updateForm}
               placeholder="Area, street or landmark"
+              maxLength={200}
               required
             />
 
@@ -393,20 +531,32 @@ function App() {
               value={form.description}
               onChange={updateForm}
               placeholder="Add details that could help someone understand the issue..."
-              rows="3"
+              rows={3}
+              maxLength={2000}
             />
 
-            <button className="button form-submit" type="submit">
-              Preview your report <span aria-hidden="true">↗</span>
+            <button
+              className="button form-submit"
+              type="submit"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Submitting..." : "Submit issue"}
+              <span aria-hidden="true">{isSubmitting ? "…" : "↗"}</span>
             </button>
+
             {message && (
-              <p className="form-message" role="status">
+              <p
+                className={`form-message ${messageType}`}
+                role="status"
+                aria-live="polite"
+              >
                 {message}
               </p>
             )}
+
             <p className="form-footnote">
-              This is currently a frontend preview. Reports are not saved to a
-              database yet.
+              Your report will be sent to the local CivicFix API. Real
+              authentication and user accounts are not implemented yet.
             </p>
           </form>
         </section>
@@ -437,10 +587,13 @@ function App() {
               civicfix<span>.</span>
             </span>
           </a>
+
           <p>Small reports. Real change. Stronger communities.</p>
+
           <a href="#home" className="back-top">
             Back to top ↑
           </a>
+
           <div className="footer-bottom">
             <span>© 2026 CivicFix</span>
             <span>Designed for people who care about their neighbourhood.</span>
